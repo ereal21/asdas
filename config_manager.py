@@ -2,7 +2,7 @@
 import json, hmac, hashlib
 from copy import deepcopy
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict, List, Optional
 
 SECRET = "supersecret"
 BASE_DIR = Path(__file__).resolve().parent
@@ -47,7 +47,28 @@ def tenants() -> List[dict]:
     return t.get("tenants", [])
 
 def set_tenants(data: List[dict]):
-    _write_json(TENANTS_PATH, {"tenants": data})
+    payload = _read_json(TENANTS_PATH)
+    payload["tenants"] = data
+    _write_json(TENANTS_PATH, payload)
+
+    mirror = payload.get("mirror_path")
+    if mirror:
+        try:
+            _write_json(Path(mirror), payload)
+        except Exception:
+            pass
+
+
+def tenant_for_user(user_id: int, username: Optional[str] = None) -> Optional[dict]:
+    uname = (username or "").lstrip("@").lower()
+    for tenant in tenants():
+        mapped_id = tenant.get("tg_user_id")
+        if mapped_id is not None and str(mapped_id) == str(user_id):
+            return tenant
+        mapped_username = tenant.get("tg_username")
+        if mapped_username and uname and mapped_username.lower().lstrip("@") == uname:
+            return tenant
+    return None
 
 def ensure_config_for(tenant_id: str) -> dict:
     cfg_path = CONFIGS_DIR / f"{tenant_id}.json"

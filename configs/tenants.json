@@ -1,9 +1,10 @@
 {
+  "mirror_path": "C:\\Users\\eriku\\Desktop\\Botai2025\\Projektas_Botas_Shopas\\Pilnas\\ParduotuvesBot\\configs\\tenants.json",
   "tenants": [
     {
       "id": "customer1",
       "name": "Customer 1",
-      "config_path": "C:\\Users\\eriku\\Desktop\\Botai2025\\Projektas_Botas_Shopas\\Pilnas\\Testas\\config.json"
+      "config_path": "C:\\Users\\eriku\\Desktop\\Botai2025\\Projektas_Botas_Shopas\\Pilnas\\ParduotuvesBot\\configs\\customer1.json"
     }
   ]
 }

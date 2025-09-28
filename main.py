@@ -198,8 +198,21 @@ async def cb_config(call: types.CallbackQuery):
 async def cb_config_functions(call: types.CallbackQuery):
     lang = db.get_language(call.from_user.id)
     history[call.from_user.id].append((call.message.text or "", call.message.reply_markup))
+    tenant = cfg_tenant_for_user(call.from_user.id, call.from_user.username)
+
+    if tenant:
+        state = cfg_ensure(tenant["id"])
+        await call.message.edit_text(
+            T[lang]["functions_toggle_title"].format(
+                tenant=_tenant_display_name(tenant)
+            ),
+            reply_markup=_user_features_kb(lang, state, tenant["id"]),
+        )
+        return
+
     await call.message.edit_text(
-        T[lang]["functions_title"], reply_markup=functions_menu_keyboard(lang)
+        T[lang]["functions_toggle_not_assigned"],
+        reply_markup=functions_menu_keyboard(lang),
     )
 
 
@@ -1070,49 +1083,118 @@ from config_manager import (
     set_tenants as cfg_set_tenants,
     ensure_config_for as cfg_ensure,
     set_feature as cfg_set_feature,
+    tenant_for_user as cfg_tenant_for_user,
 )
 
-FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
+FEATURE_IDS = ["broadcasting", "leveling", "blackjack", "assistants"]
 
 class AssignStates(StatesGroup):
     waiting = State()
 
+
+def _tenant_display_name(tenant: dict) -> str:
+    return tenant.get("name") or tenant.get("id") or "Tenant"
+
+
+def _feature_label(lang: str, feature_id: str) -> str:
+    key = f"feature_name_{feature_id}"
+    return T.get(lang, T["en"]).get(key, feature_id.replace("_", " ").title())
+
+
+def _feature_status(lang: str, enabled: bool) -> str:
+    return T.get(lang, T["en"])[
+        "feature_toggle_enabled" if enabled else "feature_toggle_disabled"
+    ]
+
+
+def _feature_action(lang: str, enabled: bool) -> str:
+    return T.get(lang, T["en"])[
+        "feature_toggle_disable" if enabled else "feature_toggle_enable"
+    ]
+
+
 def _tenants_kb():
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
     kb = InlineKeyboardMarkup(row_width=1)
     ts = cfg_tenants()
     if not ts:
-        kb.add(InlineKeyboardButton("No tenants configured", callback_data="cfg:none"))
-    for t in ts:
-        label = f"🧑‍💼 {t.get('name','Unnamed')} ({t.get('id')})"
-        kb.add(InlineKeyboardButton(label, callback_data=f"cfg:tenant:{t.get('id')}"))
+        kb.add(InlineKeyboardButton("📭 No tenants configured", callback_data="cfg:none"))
+        return kb
+
+    for tenant in ts:
+        label = f"🧑‍💼 {_tenant_display_name(tenant)} ({tenant.get('id')})"
+        kb.add(
+            InlineKeyboardButton(label, callback_data=f"cfg:tenant:{tenant.get('id')}")
+        )
     return kb
 
-def _features_onoff_kb(state: dict, tenant_id: str):
+
+def _features_onoff_kb(lang: str, state: dict, tenant_id: str):
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
     kb = InlineKeyboardMarkup(row_width=2)
     feats = state.get("features", {})
-    for fid, title in FEATURES:
-        on = feats.get(fid, False)
+    for feature_id in FEATURE_IDS:
+        enabled = feats.get(feature_id, False)
         kb.add(
-            InlineKeyboardButton(f"{title} · {'ON' if on else 'OFF'}", callback_data="cfg:none"),
-            InlineKeyboardButton("Turn Off" if on else "Turn On", callback_data=f"cfg:set:{tenant_id}:{fid}:{'off' if on else 'on'}")
+            InlineKeyboardButton(
+                f"{_feature_label(lang, feature_id)} — {_feature_status(lang, enabled)}",
+                callback_data="cfg:none",
+            ),
+            InlineKeyboardButton(
+                _feature_action(lang, enabled),
+                callback_data=f"cfg:set:{tenant_id}:{feature_id}:{'off' if enabled else 'on'}",
+            ),
         )
     kb.add(InlineKeyboardButton("⬅️ Back", callback_data="cfg:back"))
+    return kb
+
+
+)
+
+FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
+
+def _user_features_kb(lang: str, state: dict, tenant_id: str):
+    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
+
+    kb = InlineKeyboardMarkup(row_width=2)
+    feats = state.get("features", {})
+    for feature_id in FEATURE_IDS:
+        enabled = feats.get(feature_id, False)
+        kb.add(
+            InlineKeyboardButton(
+                f"{_feature_label(lang, feature_id)} — {_feature_status(lang, enabled)}",
+                callback_data="cfg:user:noop",
+            ),
+            InlineKeyboardButton(
+                _feature_action(lang, enabled),
+                callback_data=f"cfg:user:set:{tenant_id}:{feature_id}:{'off' if enabled else 'on'}",
+            ),
+        )
+    kb.add(InlineKeyboardButton(T[lang]["feature_toggle_details"], callback_data="cfg:user:info"))
+    kb.add(InlineKeyboardButton(T[lang]["back"], callback_data="back"))
     return kb
 
 @dp.message_handler(Command("admin_shield"))
 async def cmd_admin_shield(message: types.Message):
     if str(message.from_user.id) != str(ADMIN_ID):
         return await message.answer("Admin only.")
-    await message.answer("🛡 Admin Shield\nChoose a tenant or use the panel buttons.", reply_markup=_tenants_kb())
+    await message.answer(
+        "🛡 Admin Shield\nChoose a tenant or use the panel buttons.",
+        reply_markup=_tenants_kb(),
+    )
 
 @dp.callback_query_handler(lambda c: c.data == "admin:assign_customer")
 async def cb_admin_assign(call: types.CallbackQuery, state: FSMContext):
     if str(call.from_user.id) != str(ADMIN_ID):
         return await call.answer("Not allowed.", show_alert=True)
     await state.set_state(AssignStates.waiting.state)
-    await call.message.edit_text("Send mapping:\n<tenant_id> | @username | <config_path>\nExample:\ncustomer1 | @john | C:/path/to/customer1/config.json")
+    await call.message.edit_text(
+        "📋 Send mapping as:\n"
+        "<tenant_id> | <@username or user_id> | <config_path>\n\n"
+        "Example:\ncustomer1 | @john | C:/path/to/customer1/config.json",
+    )
 
 @dp.message_handler(state=AssignStates.waiting)
 async def assign_map(message: types.Message, state: FSMContext):
@@ -1120,42 +1202,137 @@ async def assign_map(message: types.Message, state: FSMContext):
         return
     parts = [p.strip() for p in message.text.split("|")]
     if len(parts) < 2:
-        return await message.answer("Format: tenant_id | @username | optional config_path")
+        return await message.answer(
+            "⚠️ Format: tenant_id | <@username or user_id> | optional config_path"
+        )
+
     tenant_id = parts[0]
-    username = parts[1].lstrip("@")
+    identifier = parts[1]
     cfg_path = parts[2] if len(parts) > 2 else ""
+
+    username = identifier.lstrip("@") if identifier.startswith("@") else ""
+    linked_user_id = None
+
+    if identifier.isdigit():
+        linked_user_id = int(identifier)
+    elif username:
+        record = db.get_user_by_username(username)
+        if record:
+            linked_user_id = record[0]
+
     ts = cfg_tenants()
     found = False
-    for t in ts:
-        if t.get("id")==tenant_id:
-            t["tg_username"] = username
-            if cfg_path: t["config_path"] = cfg_path
+    for tenant in ts:
+        if tenant.get("id") == tenant_id:
+            if username:
+                tenant["tg_username"] = username
+            if linked_user_id is not None:
+                tenant["tg_user_id"] = linked_user_id
+            if cfg_path:
+                tenant["config_path"] = cfg_path
             found = True
             break
+
     if not found:
-        ts.append({"id": tenant_id, "name": tenant_id, "tg_username": username, "config_path": cfg_path})
+        entry = {"id": tenant_id, "name": tenant_id}
+        if username:
+            entry["tg_username"] = username
+        if linked_user_id is not None:
+            entry["tg_user_id"] = linked_user_id
+        if cfg_path:
+            entry["config_path"] = cfg_path
+        ts.append(entry)
+
     cfg_set_tenants(ts)
     await state.finish()
-    await message.answer(f"Mapped @{username} → {tenant_id} ✅")
+
+    who = f"@{username}" if username else (linked_user_id or "unassigned")
+    await message.answer(f"🤝 Linked {who} → {tenant_id} ✅")
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith("cfg:tenant:"))
 async def cb_cfg_tenant(call: types.CallbackQuery):
     if str(call.from_user.id) != str(ADMIN_ID):
         return await call.answer("Not allowed.", show_alert=True)
     tenant_id = call.data.split(":", 2)[2]
+    lang = db.get_language(call.from_user.id)
     state = cfg_ensure(tenant_id)
-    await call.message.edit_text(f"⚙️ Functions for {tenant_id}", reply_markup=_features_onoff_kb(state, tenant_id))
+    tenant = next(
+        (t for t in cfg_tenants() if t.get("id") == tenant_id),
+        {"id": tenant_id},
+    )
+    await call.message.edit_text(
+        f"⚙️ {_tenant_display_name(tenant)}",
+        reply_markup=_features_onoff_kb(lang, state, tenant_id),
+    )
 
 @dp.callback_query_handler(lambda c: c.data and c.data.startswith("cfg:set:"))
 async def cb_cfg_set(call: types.CallbackQuery):
     if str(call.from_user.id) != str(ADMIN_ID):
         return await call.answer("Not allowed.", show_alert=True)
-    _, _, tenant_id, fid, mode = call.data.split(":",4)
-    new = True if mode == "on" else False
-    state = cfg_set_feature(tenant_id, fid, new)
-    await call.message.edit_reply_markup(reply_markup=_features_onoff_kb(state, tenant_id))
-    await call.answer(f"{fid} → {'ON' if new else 'OFF'}")
+    _, _, tenant_id, fid, mode = call.data.split(":", 4)
+    new_state = mode == "on"
+    lang = db.get_language(call.from_user.id)
+    state = cfg_set_feature(tenant_id, fid, new_state)
+    await call.message.edit_reply_markup(
+        reply_markup=_features_onoff_kb(lang, state, tenant_id)
+    )
+    await call.answer(
+        f"{_feature_label(lang, fid)} → {_feature_status(lang, new_state)}"
+    )
     
 @dp.callback_query_handler(lambda c: c.data == "cfg:back")
 async def cb_cfg_back(call: types.CallbackQuery):
     await call.message.edit_text("🛡 Admin Shield", reply_markup=_tenants_kb())
+
+
+@dp.callback_query_handler(lambda c: c.data == "cfg:user:info")
+async def cb_cfg_user_info(call: types.CallbackQuery):
+    tenant = cfg_tenant_for_user(call.from_user.id, call.from_user.username)
+    if not tenant:
+        lang = db.get_language(call.from_user.id)
+        return await call.answer(
+            T[lang]["feature_toggle_not_allowed"], show_alert=True
+        )
+
+    lang = db.get_language(call.from_user.id)
+    state = cfg_ensure(tenant["id"])
+    text = T[lang]["functions_toggle_title"].format(
+        tenant=_tenant_display_name(tenant)
+    )
+    history[call.from_user.id].append(
+        (text, _user_features_kb(lang, state, tenant["id"]))
+    )
+    await call.message.edit_text(
+        T[lang]["functions_title"], reply_markup=functions_menu_keyboard(lang)
+    )
+
+
+@dp.callback_query_handler(lambda c: c.data == "cfg:user:noop")
+async def cb_cfg_user_noop(call: types.CallbackQuery):
+    lang = db.get_language(call.from_user.id)
+    await call.answer(T[lang]["feature_toggle_hint"])
+
+
+@dp.callback_query_handler(lambda c: c.data and c.data.startswith("cfg:user:set:"))
+async def cb_cfg_user_set(call: types.CallbackQuery):
+    _, _, tenant_id, fid, mode = call.data.split(":", 4)
+    tenant = cfg_tenant_for_user(call.from_user.id, call.from_user.username)
+
+    if (not tenant or tenant.get("id") != tenant_id) and str(call.from_user.id) != str(ADMIN_ID):
+        lang = db.get_language(call.from_user.id)
+        return await call.answer(
+            T[lang]["feature_toggle_not_allowed"], show_alert=True
+        )
+
+    desired = mode == "on"
+    lang = db.get_language(call.from_user.id)
+    state = cfg_set_feature(tenant_id, fid, desired)
+    await call.message.edit_reply_markup(
+        reply_markup=_user_features_kb(lang, state, tenant_id)
+    )
+    await call.answer(
+        T[lang]["feature_toggle_updated"].format(
+            feature=_feature_label(lang, fid),
+            status=_feature_status(lang, desired),
+        )
+    )

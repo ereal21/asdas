@@ -246,8 +246,8 @@ def admin_panel_keyboard(lang: str, online: bool):
     kb.add(InlineKeyboardButton(toggle, callback_data="admin:toggle_online"))
     kb.add(InlineKeyboardButton(T[lang]["user_lookup"], callback_data="admin:user_lookup"))
     kb.add(InlineKeyboardButton(T[lang]["manage_rdps"], callback_data="admin:rdps"))
-    kb.add(InlineKeyboardButton("Priskirti klientą", callback_data="admin:assign_customer"))
-    kb.add(InlineKeyboardButton("Funkcijos", callback_data="cfg:back"))
+    kb.add(InlineKeyboardButton("🤝 Priskirti klientą", callback_data="admin:assign_customer"))
+    kb.add(InlineKeyboardButton("🧩 Funkcijos", callback_data="cfg:back"))
     kb.add(InlineKeyboardButton(T[lang]["back"], callback_data="back"))
     return kb
 
