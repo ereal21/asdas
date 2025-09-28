@@ -1,5 +1,6 @@
 
 import json, hmac, hashlib
+from copy import deepcopy
 from pathlib import Path
 from typing import Dict, List
 
@@ -14,9 +15,15 @@ DEFAULTS = {
         "broadcasting": False,
         "leveling": False,
         "blackjack": False,
-        "assistants": False
-    }
+        "assistants": False,
+    },
 }
+
+
+def _fresh_defaults() -> dict:
+    base = deepcopy(DEFAULTS)
+    base["features"] = dict(DEFAULTS["features"])
+    return base
 
 def _signable(data: dict) -> bytes:
     d = dict(data)
@@ -45,18 +52,15 @@ def set_tenants(data: List[dict]):
 def ensure_config_for(tenant_id: str) -> dict:
     cfg_path = CONFIGS_DIR / f"{tenant_id}.json"
     if not cfg_path.exists():
-        data = dict(DEFAULTS)
-        _sign_inplace(data)
-        _write_json(cfg_path, data)
-        return data
+        state = _fresh_defaults()
+        return _persist_config(tenant_id, state)
+
     data = _read_json(cfg_path)
     # normalize keys (in case of missing fields)
-    base = dict(DEFAULTS)
-    base["features"].update(data.get("features", {}))
-    base["version"] = data.get("version", 1)
-    _sign_inplace(base)
-    _write_json(cfg_path, base)
-    return base
+    state = _fresh_defaults()
+    state["features"].update({k: bool(v) for k, v in data.get("features", {}).items()})
+    state["version"] = int(data.get("version", state["version"]))
+    return _persist_config(tenant_id, state)
 
 def _write_to_target_if_any(tenant_id: str, data: dict):
     # if tenant mapping has a config_path, write there as well
@@ -71,16 +75,28 @@ def _write_to_target_if_any(tenant_id: str, data: dict):
                     pass
             break
 
-def toggle(tenant_id: str, feature_id: str) -> dict:
-    state = ensure_config_for(tenant_id)
-    feats: Dict[str, bool] = state["features"]
-    if feature_id not in feats:
-        feats[feature_id] = False
-    feats[feature_id] = not feats[feature_id]
-    state["version"] = int(state.get("version", 1)) + 1
+
+def _persist_config(tenant_id: str, state: dict) -> dict:
     _sign_inplace(state)
-    # write to local configs/<tenant>.json
     _write_json(CONFIGS_DIR / f"{tenant_id}.json", state)
-    # also mirror to target config.json if configured
     _write_to_target_if_any(tenant_id, state)
     return state
+
+def toggle(tenant_id: str, feature_id: str) -> dict:
+    state = ensure_config_for(tenant_id)
+    feats: Dict[str, bool] = state.setdefault("features", {})
+    current = bool(feats.get(feature_id, False))
+    feats[feature_id] = not current
+    state["version"] = int(state.get("version", 1)) + 1
+    return _persist_config(tenant_id, state)
+
+
+def set_feature(tenant_id: str, feature_id: str, enabled: bool) -> dict:
+    state = ensure_config_for(tenant_id)
+    feats: Dict[str, bool] = state.setdefault("features", {})
+    desired = bool(enabled)
+    if feats.get(feature_id, False) == desired:
+        return state
+    feats[feature_id] = desired
+    state["version"] = int(state.get("version", 1)) + 1
+    return _persist_config(tenant_id, state)

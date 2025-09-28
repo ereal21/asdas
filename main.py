@@ -51,6 +51,7 @@ from keyboards import (
     admin_rdp_cancel_keyboard,
 )
 from aiogram.dispatcher import FSMContext
+from aiogram.dispatcher.filters import Command
 from aiogram.dispatcher.filters.state import State, StatesGroup
 from texts import T
 from payments import create_invoice, ipn_handler, init_payments
@@ -1063,195 +1064,13 @@ if __name__ == "__main__":
 
 
 
-# === Feature Config Handlers (admin) ===
-from aiogram import types
-from aiogram.dispatcher.filters import Command
-from .config import ADMIN_ID
-from .config_manager import ensure_config, toggle as cfg_toggle
-
-FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
-
-def _features_kb(state: dict):
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    kb = InlineKeyboardMarkup(row_width=1)
-    feats = state.get("features", {})
-    for fid, title in FEATURES:
-        val = "Enabled" if feats.get(fid, False) else "Disabled"
-        kb.add(InlineKeyboardButton(f"{title}: {val}", callback_data=f"cfg:toggle:{fid}"))
-    kb.add(InlineKeyboardButton("⬅️ Back", callback_data="cfg:back"))
-    return kb
-
-@dp.message_handler(Command("config"))
-async def cmd_config(message: types.Message):
-    if str(message.from_user.id) != str(ADMIN_ID):
-        return await message.answer("Config is admin-only.")
-    state = ensure_config()
-    await message.answer("⚙️ Feature Toggles", reply_markup=_features_kb(state))
-
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("cfg:toggle:"))
-async def cb_cfg_toggle(call: types.CallbackQuery):
-    if str(call.from_user.id) != str(ADMIN_ID):
-        return await call.answer("Not allowed.", show_alert=True)
-    fid = call.data.split(":", 2)[2]
-    state = cfg_toggle(fid)
-    await call.message.edit_reply_markup(reply_markup=_features_kb(state))
-    await call.answer("Toggled.")
-
-@dp.callback_query_handler(lambda c: c.data == "cfg:back")
-async def cb_cfg_back(call: types.CallbackQuery):
-    await call.message.delete()
-
-
-
-# === Multi-tenant Feature Config (admin) ===
-from aiogram import types
-from aiogram.dispatcher.filters import Command
-from .config import ADMIN_ID
-from .config_manager import tenants as cfg_tenants, ensure_config_for as cfg_ensure, toggle as cfg_toggle
-
-FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
-
-def _tenants_kb():
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    kb = InlineKeyboardMarkup(row_width=1)
-    ts = cfg_tenants()
-    if not ts:
-        kb.add(InlineKeyboardButton("No tenants configured", callback_data="cfg:none"))
-    for t in ts:
-        label = f"🧑‍💼 {t.get('name','Unnamed')} ({t.get('id')})"
-        kb.add(InlineKeyboardButton(label, callback_data=f"cfg:tenant:{t.get('id')}"))
-    return kb
-
-def _features_kb(state: dict, tenant_id: str):
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    kb = InlineKeyboardMarkup(row_width=1)
-    feats = state.get("features", {})
-    for fid, title in FEATURES:
-        val = "Enabled" if feats.get(fid, False) else "Disabled"
-        kb.add(InlineKeyboardButton(f"{title}: {val}", callback_data=f"cfg:toggle:{tenant_id}:{fid}"))
-    kb.add(InlineKeyboardButton("⬅️ Back", callback_data="cfg:back"))
-    return kb
-
-@dp.message_handler(Command("config"))
-async def cmd_config(message: types.Message):
-    if str(message.from_user.id) != str(ADMIN_ID):
-        return await message.answer("Config is admin-only.")
-    await message.answer("⚙️ Choose a tenant", reply_markup=_tenants_kb())
-
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("cfg:tenant:"))
-async def cb_cfg_tenant(call: types.CallbackQuery):
-    if str(call.from_user.id) != str(ADMIN_ID):
-        return await call.answer("Not allowed.", show_alert=True)
-    tenant_id = call.data.split(":", 2)[2]
-    state = cfg_ensure(tenant_id)
-    await call.message.edit_text(f"⚙️ Feature Toggles for {tenant_id}", reply_markup=_features_kb(state, tenant_id))
-
-@dp.callback_query_handler(lambda c: c.data and c.data.startswith("cfg:toggle:"))
-async def cb_cfg_toggle(call: types.CallbackQuery):
-    if str(call.from_user.id) != str(ADMIN_ID):
-        return await call.answer("Not allowed.", show_alert=True)
-    _, _, tenant_id, fid = call.data.split(":", 3)
-    state = cfg_toggle(tenant_id, fid)
-    await call.message.edit_reply_markup(reply_markup=_features_kb(state, tenant_id))
-    await call.answer("Toggled.")
-
-@dp.callback_query_handler(lambda c: c.data == "cfg:back")
-async def cb_cfg_back(call: types.CallbackQuery):
-    await call.message.edit_text("⚙️ Choose a tenant", reply_markup=_tenants_kb())
-
-
-
-# === Admin: Assign Customer to Telegram Username ===
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from .config_manager import tenants as cfg_tenants, set_tenants as cfg_set_tenants
-
-class AssignStates(StatesGroup):
-    waiting_for_mapping = State()
-
-@dp.callback_query_handler(lambda c: c.data == "admin:assign_customer")
-async def cb_admin_assign(call: types.CallbackQuery, state: FSMContext):
-    if str(call.from_user.id) != str(ADMIN_ID):
-        return await call.answer("Not allowed.", show_alert=True)
-    await state.set_state(AssignStates.waiting_for_mapping.state)
-    await call.message.edit_text("Send mapping in format:\n<tenant_id> | @username\nExample: customer1 | @john")
-
-@dp.message_handler(state=AssignStates.waiting_for_mapping)
-async def assign_mapping(message: types.Message, state: FSMContext):
-    if str(message.from_user.id) != str(ADMIN_ID):
-        return
-    text = message.text.strip()
-    if "|" not in text:
-        return await message.answer("Use format: tenant_id | @username")
-    tenant_id, username = [x.strip() for x in text.split("|",1)]
-    username = username.lstrip("@")
-    ts = cfg_tenants()
-    # find tenant or create new entry
-    found = False
-    for t in ts:
-        if t.get("id")==tenant_id:
-            t["tg_username"] = username
-            found = True
-            break
-    if not found:
-        ts.append({"id": tenant_id, "name": tenant_id, "tg_username": username, "config_path": ""})
-    cfg_set_tenants(ts)
-    await state.finish()
-    await message.answer(f"Mapped @{username} → {tenant_id} ✅")
-
-# === Functions Menu (same toggles UI) ===
-FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
-
-def _features_onoff_kb(state: dict, tenant_id: str):
-    from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
-    kb = InlineKeyboardMarkup(row_width=2)
-    feats = state.get("features", {})
-    for fid, title in FEATURES:
-        is_on = feats.get(fid, False)
-        kb.add(
-            InlineKeyboardButton(f"{title} · {'ON' if is_on else 'OFF'}", callback_data="cfg:none"),
-            InlineKeyboardButton("Turn Off" if is_on else "Turn On", callback_data=f"cfg:set:{tenant_id}:{fid}:{'off' if is_on else 'on'}")
-        )
-    kb.add(InlineKeyboardButton("⬅️ Back", callback_data="cfg:back"))
-    return kb
-
-@dp.callback_query_handler(lambda c: c.data == "menu:functions")
-async def cb_menu_functions(call: types.CallbackQuery):
-    if str(call.from_user.id) != str(ADMIN_ID):
-        return await call.answer("Admin-only.", show_alert=True)
-    # if username was assigned to a tenant, try to pick by username; else show tenant list
-    ts = cfg_tenants()
-    # Build a menu of tenants
-    await call.message.edit_text("⚙️ Choose a tenant for Functions", reply_markup=_tenants_kb())
-
-@dp.callback_query_handler(lambda c: c.data.startswith("cfg:set:"))
-async def cb_cfg_set(call: types.CallbackQuery):
-    if str(call.from_user.id) != str(ADMIN_ID):
-        return await call.answer("Not allowed.", show_alert=True)
-    _, _, tenant_id, fid, mode = call.data.split(":",4)
-    state = cfg_ensure(tenant_id)
-    # set explicit on/off
-    cur = state["features"].get(fid, False)
-    new = True if mode=="on" else False
-    if cur != new:
-        # emulate toggle until we add dedicated setter
-        from .config_manager import toggle as _toggle
-        # If states differ, ensure ends up desired
-        tmp = _toggle(tenant_id, fid)
-        if tmp["features"].get(fid, False) != new:
-            tmp = _toggle(tenant_id, fid)
-        state = tmp
-    await call.message.edit_reply_markup(reply_markup=_features_onoff_kb(state, tenant_id))
-    await call.answer(f"Set {fid} → {mode.upper()}")
-
-
-
 # === Admin Shield: Assign customer → tenant; Functions On/Off ===
-from aiogram import types
-from aiogram.dispatcher import FSMContext
-from aiogram.dispatcher.filters import Command
-from aiogram.dispatcher.filters.state import State, StatesGroup
-from config_manager import tenants as cfg_tenants, set_tenants as cfg_set_tenants, ensure_config_for as cfg_ensure, set_feature as cfg_set_feature
+from config_manager import (
+    tenants as cfg_tenants,
+    set_tenants as cfg_set_tenants,
+    ensure_config_for as cfg_ensure,
+    set_feature as cfg_set_feature,
+)
 
 FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
 
