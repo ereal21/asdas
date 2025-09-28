@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "features": {
+    "broadcasting": false,
+    "leveling": false,
+    "blackjack": false,
+    "assistants": false
+  },
+  "sig": "6da2088188ce496ebf3344fa5ce84166eef720f2f5a543ad24cb921d2f82cc71"
+}
