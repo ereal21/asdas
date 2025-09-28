@@ -82,6 +82,23 @@ T: Dict[str, Dict[str, str]] = {
             "💳 *Payments*\n"
             "Accept secure crypto payments via NOWPayments with automatic confirmations for SOL, USDT-TRC20, and XMR."
         ),
+        "functions_toggle_title": "🧩 *Manage features for {tenant}:*",
+        "functions_toggle_not_assigned": (
+            "🚫 *No bot is linked to your account yet.*\n"
+            "Contact support or your administrator to gain access, or browse feature descriptions below."
+        ),
+        "feature_toggle_details": "ℹ️ Feature descriptions",
+        "feature_toggle_enable": "✅ Enable",
+        "feature_toggle_disable": "⛔ Disable",
+        "feature_toggle_enabled": "🟢 Enabled",
+        "feature_toggle_disabled": "🔴 Disabled",
+        "feature_toggle_hint": "Tap Enable/Disable to switch a feature.",
+        "feature_toggle_not_allowed": "You are not linked to this bot.",
+        "feature_toggle_updated": "{feature} → {status}",
+        "feature_name_broadcasting": "📢 Broadcasting",
+        "feature_name_leveling": "📈 Leveling",
+        "feature_name_blackjack": "🃏 Blackjack",
+        "feature_name_assistants": "🧑‍🤝‍🧑 Assistants",
         "feature_anti_spam": "🛡 Anti-spam filter",
         "feature_anti_spam_desc": (
             "🛡 *Anti-spam filter*\n"
@@ -267,6 +284,23 @@ T: Dict[str, Dict[str, str]] = {
             "💳 *Платежи*\n"
             "Принимайте безопасные криптоплатежи через NOWPayments с авто-подтверждением для SOL, USDT-TRC20 и XMR."
         ),
+        "functions_toggle_title": "🧩 *Управление функциями для {tenant}:*",
+        "functions_toggle_not_assigned": (
+            "🚫 *К вашему аккаунту пока не привязан бот.*\n"
+            "Свяжитесь с поддержкой или администратором, либо изучите описания функций ниже."
+        ),
+        "feature_toggle_details": "ℹ️ Описание функций",
+        "feature_toggle_enable": "✅ Включить",
+        "feature_toggle_disable": "⛔ Выключить",
+        "feature_toggle_enabled": "🟢 Включено",
+        "feature_toggle_disabled": "🔴 Выключено",
+        "feature_toggle_hint": "Нажмите Включить/Выключить, чтобы изменить функцию.",
+        "feature_toggle_not_allowed": "У вас нет доступа к этому боту.",
+        "feature_toggle_updated": "{feature} → {status}",
+        "feature_name_broadcasting": "📢 Рассылки",
+        "feature_name_leveling": "📈 Уровни",
+        "feature_name_blackjack": "🃏 Блэкджек",
+        "feature_name_assistants": "🧑‍🤝‍🧑 Ассистенты",
         "feature_anti_spam": "🛡 Антиспам-фильтр",
         "feature_anti_spam_desc": (
             "🛡 *Антиспам-фильтр*\n"
@@ -452,6 +486,23 @@ T: Dict[str, Dict[str, str]] = {
             "💳 *Mokėjimai*\n"
             "Priimkite saugius kriptomokėjimus per NOWPayments su automatiniu SOL, USDT-TRC20 ir XMR patvirtinimu."
         ),
+        "functions_toggle_title": "🧩 *Valdykite funkcijas botui {tenant}:*",
+        "functions_toggle_not_assigned": (
+            "🚫 *Jūsų paskyrai dar nepriskirtas botas.*\n"
+            "Susisiekite su pagalba ar administratoriumi, o kol kas galite peržiūrėti funkcijų aprašymus žemiau."
+        ),
+        "feature_toggle_details": "ℹ️ Funkcijų aprašymai",
+        "feature_toggle_enable": "✅ Įjungti",
+        "feature_toggle_disable": "⛔ Išjungti",
+        "feature_toggle_enabled": "🟢 Įjungta",
+        "feature_toggle_disabled": "🔴 Išjungta",
+        "feature_toggle_hint": "Paspauskite Įjungti/Išjungti, kad pakeistumėte funkciją.",
+        "feature_toggle_not_allowed": "Neturite prieigos prie šio boto.",
+        "feature_toggle_updated": "{feature} → {status}",
+        "feature_name_broadcasting": "📢 Transliacijos",
+        "feature_name_leveling": "📈 Lygiai",
+        "feature_name_blackjack": "🃏 Blackjack",
+        "feature_name_assistants": "🧑‍🤝‍🧑 Asistentai",
         "feature_anti_spam": "🛡 Anti-spamo filtras",
         "feature_anti_spam_desc": (
             "🛡 *Anti-spamo filtras*\n"
