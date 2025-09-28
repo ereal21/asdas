@@ -1151,6 +1151,10 @@ def _features_onoff_kb(lang: str, state: dict, tenant_id: str):
     return kb
 
 
+)
+
+FEATURES = [("broadcasting","Broadcasting"), ("leveling","Leveling"), ("blackjack","Blackjack"), ("assistants","Assistants")]
+
 def _user_features_kb(lang: str, state: dict, tenant_id: str):
     from aiogram.types import InlineKeyboardMarkup, InlineKeyboardButton
 
